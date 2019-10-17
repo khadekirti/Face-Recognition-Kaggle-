@@ -1,0 +1,598 @@
+{
+ "cells": [
+  {
+   "cell_type": "code",
+   "execution_count": 15,
+   "metadata": {
+    "colab": {
+     "base_uri": "https://localhost:8080/",
+     "height": 207
+    },
+    "colab_type": "code",
+    "id": "_is3FyF3mBXg",
+    "outputId": "a4fb7789-6656-42df-f50c-89e91e2817c4"
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Requirement already satisfied: segmentation_models_pytorch in /usr/local/lib/python3.6/dist-packages (0.0.3)\n",
+      "Requirement already satisfied: torchvision<=0.4.0,>=0.2.2 in /usr/local/lib/python3.6/dist-packages (from segmentation_models_pytorch) (0.4.0)\n",
+      "Requirement already satisfied: pretrainedmodels==0.7.4 in /usr/local/lib/python3.6/dist-packages (from segmentation_models_pytorch) (0.7.4)\n",
+      "Requirement already satisfied: torch==1.2.0 in /usr/local/lib/python3.6/dist-packages (from torchvision<=0.4.0,>=0.2.2->segmentation_models_pytorch) (1.2.0)\n",
+      "Requirement already satisfied: pillow>=4.1.1 in /usr/local/lib/python3.6/dist-packages (from torchvision<=0.4.0,>=0.2.2->segmentation_models_pytorch) (4.3.0)\n",
+      "Requirement already satisfied: numpy in /usr/local/lib/python3.6/dist-packages (from torchvision<=0.4.0,>=0.2.2->segmentation_models_pytorch) (1.16.5)\n",
+      "Requirement already satisfied: six in /usr/local/lib/python3.6/dist-packages (from torchvision<=0.4.0,>=0.2.2->segmentation_models_pytorch) (1.12.0)\n",
+      "Requirement already satisfied: munch in /usr/local/lib/python3.6/dist-packages (from pretrainedmodels==0.7.4->segmentation_models_pytorch) (2.3.2)\n",
+      "Requirement already satisfied: tqdm in /usr/local/lib/python3.6/dist-packages (from pretrainedmodels==0.7.4->segmentation_models_pytorch) (4.28.1)\n",
+      "Requirement already satisfied: olefile in /usr/local/lib/python3.6/dist-packages (from pillow>=4.1.1->torchvision<=0.4.0,>=0.2.2->segmentation_models_pytorch) (0.46)\n"
+     ]
+    }
+   ],
+   "source": [
+    "!pip install segmentation_models_pytorch"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 0,
+   "metadata": {
+    "colab": {},
+    "colab_type": "code",
+    "id": "wh1H-1m2vxZh"
+   },
+   "outputs": [],
+   "source": [
+    "import os\n",
+    "import time  \n",
+    "from tqdm import tqdm  \n",
+    "import warnings\n",
+    "warnings.filterwarnings(\"ignore\")\n",
+    "  \n",
+    "import pandas as pd\n",
+    "import numpy as np \n",
+    "import random\n",
+    "from matplotlib import pyplot as plt\n",
+    "seed = 69\n",
+    "random.seed(seed)\n",
+    "np.random.seed(seed)   \n",
+    "os.environ[\"PYTHONHASHSEED\"] = str(seed)\n",
+    " \n",
+    "\n",
+    "from sklearn.model_selection import train_test_split\n",
+    "\n",
+    "\n",
+    "import cv2\n",
+    "import torch\n",
+    "import torch.nn as nn\n",
+    "from torch.nn import functional as F\n",
+    "import torch.optim as optim\n",
+    "import torch.backends.cudnn as cudnn\n",
+    "import torch.utils.data as data\n",
+    "from torch.utils.data import DataLoader, Dataset, sampler\n",
+    "from albumentations import (HorizontalFlip, ShiftScaleRotate, Normalize, Resize, Compose, GaussNoise)\n",
+    "from albumentations.pytorch import ToTensor\n",
+    "from torch.optim.lr_scheduler import ReduceLROnPlateau\n",
+    "from torch.utils.data.sampler import WeightedRandomSampler\n",
+    "\n",
+    "torch.cuda.manual_seed(seed)\n",
+    "torch.backends.cudnn.deterministic = True \n",
+    "\n",
+    "\n",
+    "import segmentation_models_pytorch as smp\n",
+    "\n",
+    "from collections import Counter\n",
+    "from PIL import Image\n",
+    "import math\n",
+    "import seaborn as sns\n",
+    "from collections import defaultdict\n",
+    "from pathlib import Path\n",
+    "from tqdm import tqdm "
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 17,
+   "metadata": {
+    "colab": {
+     "base_uri": "https://localhost:8080/",
+     "height": 34
+    },
+    "colab_type": "code",
+    "id": "ucvF29vSW2QG",
+    "outputId": "15456827-b556-44a2-a059-41a4067ed4f9"
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Mounted at /content/drive/\n"
+     ]
+    }
+   ],
+   "source": [
+    "# Load the Drive helper and mount\n",
+    "from google.colab import drive\n",
+    "\n",
+    "# This will prompt for authorization.\n",
+    "drive.mount('/content/drive/')"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 0,
+   "metadata": {
+    "colab": {},
+    "colab_type": "code",
+    "id": "ZTMen-OSW4BJ"
+   },
+   "outputs": [],
+   "source": [
+    "path = '/content/drive/My Drive/project/data_main/'"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {
+    "colab_type": "text",
+    "id": "gRAN_iqlp4zg"
+   },
+   "source": [
+    "# **Get Data**\n"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 0,
+   "metadata": {
+    "colab": {},
+    "colab_type": "code",
+    "id": "tM03LQ6xYI38"
+   },
+   "outputs": [],
+   "source": [
+    "def mask2rle(img):\n",
+    "    '''\n",
+    "    For an ouput numpy array\n",
+    "    1  == Mask, \n",
+    "    0  == background\n",
+    "    Returns run length as string formated\n",
+    "    '''\n",
+    "    pixels= img.T.flatten()\n",
+    "    pixels = np.concatenate([[0], pixels, [0]])\n",
+    "    runs = np.where(pixels[1:] != pixels[:-1])[0] + 1\n",
+    "    runs[1::2] -= runs[::2]\n",
+    "    return ' '.join(str(x) for x in runs)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 0,
+   "metadata": {
+    "colab": {},
+    "colab_type": "code",
+    "id": "uQ1ZVhEqXMpR"
+   },
+   "outputs": [],
+   "source": [
+    "def make_mask(row_id, df):\n",
+    "    '''\n",
+    "    Given a row index, \n",
+    "    return a image id and mask of the image in the format of (256, 1600, 4)\n",
+    "    from the dataframe `df`\n",
+    "    '''\n",
+    "    fname = df.iloc[row_id].name\n",
+    "    labels = df.iloc[row_id][:4]\n",
+    "    masks = np.zeros((256, 1600, 4), dtype=np.float32) \n",
+    "    for idx, label in enumerate(labels.values):\n",
+    "        if label is not np.nan:\n",
+    "            label = label.split(\" \")\n",
+    "            positions = map(int, label[0::2])\n",
+    "            length = map(int, label[1::2])\n",
+    "            mask = np.zeros(256 * 1600, dtype=np.uint8)\n",
+    "            for pos, le in zip(positions, length):\n",
+    "                mask[pos:(pos + le)] = 1\n",
+    "            masks[:, :, idx] = mask.reshape(256, 1600, order='F')\n",
+    "    return fname, masks"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 0,
+   "metadata": {
+    "colab": {},
+    "colab_type": "code",
+    "id": "ko0OmtnNTgSq"
+   },
+   "outputs": [],
+   "source": [
+    "def get_transforms(phase, mean, std):\n",
+    "    '''\n",
+    "    Augment the data with Horizontal flip \n",
+    "    Transform the data with normalisation & convert to tensor. \n",
+    "    '''\n",
+    "    list_transforms = []\n",
+    "    if phase == \"train\":\n",
+    "        list_transforms.extend(\n",
+    "            [\n",
+    "                HorizontalFlip(p=0.5), \n",
+    "            ]\n",
+    "        )\n",
+    "    list_transforms.extend(\n",
+    "        [\n",
+    "            Normalize(mean=mean, std=std, p=1),\n",
+    "            ToTensor(),\n",
+    "        ]\n",
+    "    )\n",
+    "    list_trfms = Compose(list_transforms)\n",
+    "    return list_trfms"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 0,
+   "metadata": {
+    "colab": {},
+    "colab_type": "code",
+    "id": "3LWN_9MHXOSP"
+   },
+   "outputs": [],
+   "source": [
+    "class TrainDataset(Dataset):\n",
+    "    '''\n",
+    "    Train dataset,\n",
+    "    This is made in the form to be inputed in dataloader\n",
+    "    Hence, it contains __getitem__ and __len__\n",
+    "    '''\n",
+    "    def __init__(self, df, data_folder, mean, std, phase):\n",
+    "        self.df = df\n",
+    "        self.root = data_folder\n",
+    "        self.mean = mean\n",
+    "        self.std = std\n",
+    "        self.phase = phase\n",
+    "        self.transforms = get_transforms(phase, mean, std)\n",
+    "        self.fnames = self.df.index.tolist()\n",
+    "    def __getitem__(self, idx):\n",
+    "        image_id, mask = make_mask(idx, self.df)\n",
+    "        image_path = os.path.join(self.root, \"train_images\",  image_id)\n",
+    "        img = cv2.imread(image_path)\n",
+    "        augmented = self.transforms(image=img, mask=mask)\n",
+    "        img = augmented['image']\n",
+    "        mask = augmented['mask'] # 1x256x1600x4\n",
+    "        mask = mask[0].permute(2, 0, 1) # 1x4x256x1600\n",
+    "        return img, mask\n",
+    "    def __len__(self):\n",
+    "        return len(self.fnames)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 0,
+   "metadata": {
+    "colab": {},
+    "colab_type": "code",
+    "id": "71ZNTXfXZjLg"
+   },
+   "outputs": [],
+   "source": [
+    "def class_flag(x):\n",
+    "    nan = 'nan'\n",
+    "    if x[4] != nan:\n",
+    "        return 4\n",
+    "    elif x[3] != nan:\n",
+    "        return 3\n",
+    "    elif x[2] != nan:\n",
+    "        return 2\n",
+    "    elif x[1] != nan  :\n",
+    "        print(x)\n",
+    "        return 1  \n",
+    "    else:\n",
+    "      return 0 \n",
+    "\n",
+    "def provider(data_folder,df_path,phase,mean=None,std=None,batch_size=8,num_workers=4,): \n",
+    "    '''Returns dataloader for the model training'''\n",
+    "    df = pd.read_csv(df_path) \n",
+    "    ### Get the weights for class imbalance \n",
+    "    class_dict = defaultdict(int)\n",
+    "    kind_class_dict = defaultdict(int)\n",
+    "\n",
+    "    no_defects_num = 0\n",
+    "    defects_num = 0\n",
+    "\n",
+    "    for col in range(0, len(df), 4):\n",
+    "        img_names = [str(i).split(\"_\")[0] for i in df.iloc[col:col+4, 0].values]\n",
+    "        if not (img_names[0] == img_names[1] == img_names[2] == img_names[3]):\n",
+    "            raise ValueError\n",
+    "            \n",
+    "        labels = df.iloc[col:col+4, 1]\n",
+    "        if labels.isna().all():\n",
+    "            no_defects_num += 1\n",
+    "        else:\n",
+    "            defects_num += 1\n",
+    "        \n",
+    "        kind_class_dict[sum(labels.isna().values == False)] += 1\n",
+    "            \n",
+    "        for idx, label in enumerate(labels.isna().values.tolist()):  \n",
+    "            if label == False:\n",
+    "                class_dict[idx+1] += 1\n",
+    "        if sum(labels.isna().values.tolist()) == 4: \n",
+    "          class_dict[5] += 1                 \n",
+    "    df['ImageId'], df['ClassId'] = zip(*df['ImageId_ClassId'].str.split('_'))\n",
+    "    df['ClassId'] = df['ClassId'].astype(int)\n",
+    "    df = df.pivot(index='ImageId',columns='ClassId',values='EncodedPixels')\n",
+    "    df['defects'] = df.count(axis=1)\n",
+    "    train_df, val_df = train_test_split(df, test_size=0.2, stratify=df[\"defects\"], random_state=69)\n",
+    "    df = train_df if phase == \"train\" else val_df\n",
+    "    image_dataset = TrainDataset(df, data_folder, mean, std, phase)\n",
+    "    df2 = df.reset_index()\n",
+    "    df2[1] = df2[1].astype(str)\n",
+    "    df2[2] = df2[2].astype(str)\n",
+    "    df2[3] = df2[3].astype(str)\n",
+    "    df2[4] = df2[1].astype(str)\n",
+    "    df2['class_id'] = df2.apply(class_flag, axis = 1)\n",
+    "    weight = 1/np.array(list(class_dict.values()))\n",
+    "    samples_weight = np.array([weight[t] for t in list(df2['class_id'] - 1)])\n",
+    "    samples_weight = torch.from_numpy(samples_weight)\n",
+    "    samples_weigth = samples_weight.double()\n",
+    "    sampler = WeightedRandomSampler(samples_weight, len(samples_weight)) \n",
+    "    dataloader = DataLoader(\n",
+    "        image_dataset,\n",
+    "        sampler=sampler,\n",
+    "        batch_size=batch_size,\n",
+    "        num_workers=num_workers,\n",
+    "        pin_memory=True,\n",
+    "        shuffle=False,   \n",
+    "    )\n",
+    "    return dataloader \n"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {
+    "colab_type": "text",
+    "id": "PZmW06A-wsHs"
+   },
+   "source": [
+    "# **Model**"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 0,
+   "metadata": {
+    "colab": {},
+    "colab_type": "code",
+    "id": "aZ66zeU7-Osn"
+   },
+   "outputs": [],
+   "source": [
+    "model = smp.Unet(\"resnet18\", encoder_weights=None , classes=4, activation='softmax')"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {
+    "colab_type": "text",
+    "id": "Ch6vXw2N99CO"
+   },
+   "source": [
+    "# Train & Validating the data"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 0,
+   "metadata": {
+    "colab": {},
+    "colab_type": "code",
+    "id": "zrf1BnNQXRyw"
+   },
+   "outputs": [],
+   "source": [
+    "sample_submission_path = path + 'sample_submission.csv'\n",
+    "train_df_path = path + 'train.csv'\n",
+    "data_folder = path\n",
+    "test_data_folder = path + \"test_images\""
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 0,
+   "metadata": {
+    "colab": {},
+    "colab_type": "code",
+    "id": "y1nNZdRr7aNP"
+   },
+   "outputs": [],
+   "source": [
+    "def dice_loss(input_, target):\n",
+    "    smooth = 1.\n",
+    "    iflat = input_.view(-1)\n",
+    "    tflat = target.view(-1)\n",
+    "    intersection = (iflat * tflat).sum()\n",
+    "    \n",
+    "    return 1 - ((2. * intersection + smooth) /\n",
+    "              (iflat.sum() + tflat.sum() + smooth))"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 0,
+   "metadata": {
+    "colab": {},
+    "colab_type": "code",
+    "id": "Nut7hEnrC3-U"
+   },
+   "outputs": [],
+   "source": [
+    "class Trainer(object):\n",
+    "    '''This class takes care of training and validation of our model'''\n",
+    "    def __init__(self, model):\n",
+    "        self.num_workers = 6\n",
+    "        self.batch_size = {\"train\": 4, \"val\": 4}\n",
+    "        self.accumulation_steps = 32 // self.batch_size['train']\n",
+    "        self.lr = 5e-4\n",
+    "        self.num_epochs = 20\n",
+    "        self.best_loss = float(\"inf\")\n",
+    "        self.phases = [\"train\", \"val\"]\n",
+    "        self.device = torch.device(\"cuda:0\")\n",
+    "        torch.set_default_tensor_type(\"torch.cuda.FloatTensor\")\n",
+    "        self.net = model\n",
+    "        self.criterion = dice_loss\n",
+    "        self.optimizer = optim.Adam(self.net.parameters(), lr=self.lr)\n",
+    "        self.scheduler = ReduceLROnPlateau(self.optimizer, mode=\"min\", patience=3, verbose=True)\n",
+    "        self.net = self.net.to(self.device)\n",
+    "        cudnn.benchmark = True\n",
+    "        self.dataloaders = { phase: provider(\n",
+    "        data_folder=data_folder,\n",
+    "        df_path=train_df_path,\n",
+    "        phase=phase,\n",
+    "        mean=(0.485, 0.456, 0.406),\n",
+    "        std=(0.229, 0.224, 0.225),\n",
+    "        batch_size=self.batch_size[phase],\n",
+    "        num_workers=self.num_workers, ) for phase in self.phases} \n",
+    "        self.losses = {phase: [] for phase in self.phases}\n",
+    "    def forward(self, images, targets):\n",
+    "        images = images.to(self.device)\n",
+    "        masks = targets.to(self.device)\n",
+    "        outputs = self.net(images)\n",
+    "        loss = self.criterion(outputs, masks)\n",
+    "        return loss, outputs\n",
+    "    def iterate(self, epoch, phase):\n",
+    "        start = time.strftime(\"%H:%M:%S\")\n",
+    "        print(f\"Starting epoch: {epoch} | Phae: {phase} | Start Time : {start}\")\n",
+    "        batch_size = self.batch_size[phase]\n",
+    "        self.net.train(phase == \"train\")\n",
+    "        dataloader = self.dataloaders[phase]\n",
+    "        running_loss = 0.0\n",
+    "        total_batches = len(dataloader)\n",
+    "        self.optimizer.zero_grad()\n",
+    "        for itr, batch in enumerate(dataloader): \n",
+    "            images, targets = batch\n",
+    "            loss, outputs = self.forward(images, targets)\n",
+    "            loss = loss / self.accumulation_steps\n",
+    "            if phase == \"train\":\n",
+    "                loss.backward()\n",
+    "                if (itr + 1 ) % self.accumulation_steps == 0:\n",
+    "                    self.optimizer.step()\n",
+    "                    self.optimizer.zero_grad()\n",
+    "            running_loss += loss.item()\n",
+    "            outputs = outputs.detach().cpu()\n",
+    "        epoch_loss = (running_loss * self.accumulation_steps) / total_batches\n",
+    "        self.losses[phase].append(epoch_loss)\n",
+    "        torch.cuda.empty_cache()\n",
+    "        return epoch_loss\n",
+    "    def start(self):\n",
+    "        for epoch in range(self.num_epochs):\n",
+    "            self.iterate(epoch, \"train\")\n",
+    "            state = {\n",
+    "                \"epoch\": epoch,\n",
+    "                \"best_loss\": self.best_loss,\n",
+    "                \"state_dict\": self.net.state_dict(),\n",
+    "                \"optimizer\": self.optimizer.state_dict(),\n",
+    "            }\n",
+    "            with torch.no_grad():\n",
+    "                val_loss = self.iterate(epoch, \"val\")\n",
+    "                self.scheduler.step(val_loss)\n",
+    "            if val_loss < self.best_loss:\n",
+    "                state[\"best_loss\"] = self.best_loss = val_loss\n",
+    "                torch.save(state, \"./model.pth\")\n",
+    "            print(f\"For epoch: {epoch} | Loss is: {val_loss}\")\n",
+    "        print(f\"For UNET Model, without Pretrain weight and class imbalance for 20 epoches , the best loss is: {self.best_loss}\")    \n",
+    "    "
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 0,
+   "metadata": {
+    "colab": {
+     "base_uri": "https://localhost:8080/",
+     "height": 459
+    },
+    "colab_type": "code",
+    "id": "z6lsjViuUMG4",
+    "outputId": "cf5e81d6-50b1-44e3-a1e0-3579f6cf5877"
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Starting epoch: 0 | Phae: train | Start Time : 12:12:10\n",
+      "Starting epoch: 0 | Phae: val | Start Time : 12:40:22\n",
+      "For epoch: 0 | Loss is: 0.9913508593562298\n",
+      "Starting epoch: 1 | Phae: train | Start Time : 12:43:07\n",
+      "Starting epoch: 1 | Phae: val | Start Time : 13:10:52\n",
+      "For epoch: 1 | Loss is: 1.0012135786168717\n",
+      "Starting epoch: 2 | Phae: train | Start Time : 13:13:15\n",
+      "Starting epoch: 2 | Phae: val | Start Time : 13:41:04\n",
+      "For epoch: 2 | Loss is: 1.0042069164861367\n",
+      "Starting epoch: 3 | Phae: train | Start Time : 13:43:27\n",
+      "Starting epoch: 3 | Phae: val | Start Time : 14:11:18\n",
+      "For epoch: 3 | Loss is: 0.9655768785074899\n",
+      "Starting epoch: 4 | Phae: train | Start Time : 14:13:49\n",
+      "Starting epoch: 4 | Phae: val | Start Time : 14:41:35\n",
+      "For epoch: 4 | Loss is: 1.014053603897792\n",
+      "Starting epoch: 5 | Phae: train | Start Time : 14:43:58\n",
+      "Starting epoch: 5 | Phae: val | Start Time : 15:11:46\n",
+      "For epoch: 5 | Loss is: 0.989211077625687\n",
+      "Starting epoch: 6 | Phae: train | Start Time : 15:14:09\n",
+      "Starting epoch: 6 | Phae: val | Start Time : 15:41:54\n",
+      "For epoch: 6 | Loss is: 1.108794565610173\n",
+      "Starting epoch: 7 | Phae: train | Start Time : 15:44:17\n",
+      "Starting epoch: 7 | Phae: val | Start Time : 16:12:08\n",
+      "Epoch     7: reducing learning rate of group 0 to 5.0000e-05.\n",
+      "For epoch: 7 | Loss is: 0.9753116071698017\n",
+      "Starting epoch: 8 | Phae: train | Start Time : 16:14:34\n"
+     ]
+    }
+   ],
+   "source": [
+    "model_trainer = Trainer(model)\n",
+    "model_trainer.start()"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 0,
+   "metadata": {
+    "colab": {},
+    "colab_type": "code",
+    "id": "pGBrDEGiUo5N"
+   },
+   "outputs": [],
+   "source": []
+  }
+ ],
+ "metadata": {
+  "accelerator": "GPU",
+  "colab": {
+   "collapsed_sections": [],
+   "name": "Kaggle : 01 UNET + No Pretrain + Class Imbalance.ipynb",
+   "provenance": [],
+   "toc_visible": true
+  },
+  "kernelspec": {
+   "display_name": "Python 3",
+   "language": "python",
+   "name": "python3"
+  },
+  "language_info": {
+   "codemirror_mode": {
+    "name": "ipython",
+    "version": 3
+   },
+   "file_extension": ".py",
+   "mimetype": "text/x-python",
+   "name": "python",
+   "nbconvert_exporter": "python",
+   "pygments_lexer": "ipython3",
+   "version": "3.7.3"
+  }
+ },
+ "nbformat": 4,
+ "nbformat_minor": 1
+}
